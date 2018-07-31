@@ -1,24 +1,13 @@
-module WordySyntax
+module SymbolicSyntax
 
 import Union
 
--- declaring union types
-
-StringOrBool : Type
-StringOrBool = Union [ String, Bool ]
-
-BoolOrString : Type
-BoolOrString = Union [ Bool, String ]
-
-StringBoolOrNat : Type
-StringBoolOrNat = Union [ String, Bool, Nat ]
-
 -- instantiating union types
 
-itsABool : StringOrBool
+itsABool : Union [String, Bool]
 itsABool = just True
 
-itsAString : StringOrBool
+itsAString : Union [String, Bool]
 itsAString = just "Hello"
 
 -- extracting from union types: it could be a string, or a bool, but not a nat
@@ -35,27 +24,32 @@ probablyNotBool = perhaps itsAString -- yielding Nothing
 
 -- widening union types, either to a larger set of types
 
-stillAString : StringBoolOrNat
+stillAString : Union [String, Bool, Nat]
 stillAString = widen itsAString
 
 -- or exactly the same set of types, just specified in a different order
 
-alsoStillAString : BoolOrString
+alsoStillAString : Union [Bool, String]
 alsoStillAString = widen itsAString
 
 -- funions are functions over unions, built from functions over its possibilities
 
-display : Funion [String, Bool, Nat ] String
+display : Funion [String, Bool, Nat]  String
 display = [ id, show, show ]
 
 -- and can be applied to a union using match
 
 showMeTheString : String
-showMeTheString = match display stillAString
+showMeTheString = display |$| stillAString
 
 -- including subtype matches - note that here,
 -- display is a (String || Bool || Nat) |-> String
 -- but itsAString is just a (String || Bool)
 
 showMeTheString2 : String
-showMeTheString2 = match display itsAString
+showMeTheString2 = display |$| itsAString
+
+-- and even on raw types, if they match a union case
+
+showMeTheString3 : String
+showMeTheString3 = display $ True

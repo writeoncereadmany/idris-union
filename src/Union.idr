@@ -51,16 +51,16 @@ namespace Union
     (::) : (x -> a) -> Funion xs a -> Funion (x :: xs) a
 
   total
-  match' : Union xs -> Funion xs a -> a
-  match' (This val) (f :: _) = f val
-  match' (NotYet rest) (_ :: cases) = match' rest cases
+  match' : Funion xs a -> Union xs -> a
+  match' (f :: _) (This val) = f val
+  match' (_ :: cases) (NotYet rest) = match' cases rest
 
   total
-  match : Union xs
+  match : Funion ys a
+       -> Union xs
        -> { auto prf : SupersetOf ys xs}
-       -> Funion ys a
        -> a
-  match xs clauses = match' (widen xs) clauses
+  match clauses xs = match' clauses (widen xs)
 
 
 
@@ -92,3 +92,11 @@ namespace Union
   -- Once I've solved that problem, I can also implement operations like
   -- narrow or split
   map f { prf  =  ReplaceHere } (NotYet x) = ?only_possible_under_type_duplication_1
+
+  infixl 0 |$|
+  (|$|) : Funion xs t -> Union ys -> { auto prf: SupersetOf xs ys } -> t
+  (|$|) f u = match f u
+
+  infixl 0 $
+  ($) : Funion xs t -> a -> { auto prf: SupersetOf xs [a] } -> t
+  ($) f { prf } v = match f (just v)
