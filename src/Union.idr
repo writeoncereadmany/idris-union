@@ -2,6 +2,10 @@ module Union
 
 %access public export
 
+infixl 0 >>>
+(>>>) : a -> (a -> b) -> b
+(>>>) x f = f x
+
 namespace Union
   data Union : List Type -> Type where
     This  : a -> Union (a :: rest)
@@ -93,6 +97,10 @@ namespace Union
   -- narrow or split
   map f { prf  =  ReplaceHere } (NotYet x) = ?only_possible_under_type_duplication_1
 
+  infixl 5 |->
+  (|->) : List Type -> Type -> Type
+  (|->) forms ret = Funion forms ret
+
   infixl 0 |$|
   (|$|) : Funion xs t -> Union ys -> { auto prf: SupersetOf xs ys } -> t
   (|$|) f u = match f u
@@ -100,3 +108,27 @@ namespace Union
   infixl 0 $
   ($) : Funion xs t -> a -> { auto prf: SupersetOf xs [a] } -> t
   ($) f { prf } v = match f (just v)
+
+  infixl 0 |>>
+  (|>>) : Union ys -> Funion xs t -> { auto prf : SupersetOf xs ys } -> t
+  u |>> f = f |$| u
+
+  (>>>) :a -> Funion xs t -> { auto prf: SupersetOf xs [a] } -> t
+
+namespace FunctionFunction
+  (||) : (a -> c) -> (b -> c) -> [a, b] |-> c
+  (||) f g = [f, g]
+
+namespace FunctionFunion
+  (||) : (a -> c) -> (b |-> c) -> (a :: b) |-> c
+  (||) f g = f :: g
+
+namespace FunionFunction
+  (||) : (a |-> c) -> (b -> c) -> (a ++ [b]) |-> c
+  (||) [] f = [f]
+  (||) (f :: fs) g = f :: (fs || g)
+
+namespace FunionFunion
+  (||) : (a |-> c) -> (b |-> c) -> (a ++ b) |->  c
+  (||) [] g = g
+  (||) (f :: fs) g = f :: (fs || g)
