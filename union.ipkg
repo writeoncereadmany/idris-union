@@ -1,0 +1,11 @@
+package union
+
+sourcedir = src
+
+pkgs = specdris
+
+modules = Union
+       -- test modules
+        , Test.UnionSpec
+
+tests = UnionSpec.specs
