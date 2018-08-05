@@ -2,9 +2,16 @@ module Union
 
 %access public export
 
+infixl 0 $
 infixl 0 >>>
-(>>>) : a -> (a -> b) -> b
-(>>>) x f = f x
+infixl 5 |->
+
+namespace Function
+  ($) : (a -> b) -> a -> b
+  ($) f a = f a
+
+  (>>>) : a -> (a -> b) -> b
+  (>>>) x f = f x
 
 namespace Union
   data Union : List Type -> Type where
@@ -20,6 +27,9 @@ namespace Union
     ThisOneCovered : Contains super first
                   -> SupersetOf super (rest)
                   -> SupersetOf super (first :: rest)
+
+  data IsUnion : Type -> List Type -> Type where
+    MkIsUnion : IsUnion (Union xs) xs
 
   total
   just : a -> { auto prf : Contains ys a } -> Union ys
@@ -48,25 +58,22 @@ namespace Union
   widen (This x) { prf = (ThisOneCovered y z) } = just x
   widen (NotYet x) { prf = (ThisOneCovered y z) } = widen x
 
-  -- a funion is a function on unions, built from functions on its alternative
-  -- types
-  data Funion : List Type -> Type -> Type where
-    Nil : Funion [] a
-    (::) : (x -> a) -> Funion xs a -> Funion (x :: xs) a
+namespace Funion
+  data (|->) : List Type -> Type -> Type where
+    Nil : [] |-> a
+    (::) : (x -> a) -> (xs |-> a) -> (x :: xs) |-> a
 
   total
-  match' : Funion xs a -> Union xs -> a
+  match' : xs |-> a -> Union xs -> a
   match' (f :: _) (This val) = f val
   match' (_ :: cases) (NotYet rest) = match' cases rest
 
   total
-  match : Funion ys a
+  match : ys |-> a
        -> Union xs
        -> { auto prf : SupersetOf ys xs}
        -> a
   match clauses xs = match' clauses (widen xs)
-
-
 
   data CanReplace : List Type -> Type -> Type -> List Type -> Type where
     ReplaceHere : CanReplace (a :: xs) a b (b :: xs)
@@ -86,8 +93,8 @@ namespace Union
      -> Union xs
      -> Union ys
   -- these three cases completely describe the behaviour of map
-  map f { prf  =  ReplaceHere } (This x) = just $ f x
-  map f { prf  =  (ReplaceThere prf') } (NotYet union') = NotYet $ map f union'
+  map f { prf  =  ReplaceHere } (This x) = just (f x)
+  map f { prf  =  (ReplaceThere prf') } (NotYet union') = NotYet (map f union')
   map f { prf  =  (ReplaceThere z) } (This x) = just x
   -- this case should be probably impossible, if I can find a way to
   -- ensure a union never mentions the same type twice
@@ -97,23 +104,24 @@ namespace Union
   -- narrow or split
   map f { prf  =  ReplaceHere } (NotYet x) = ?only_possible_under_type_duplication_1
 
-  infixl 5 |->
-  (|->) : List Type -> Type -> Type
-  (|->) forms ret = Funion forms ret
-
   infixl 0 |$|
-  (|$|) : Funion xs t -> Union ys -> { auto prf: SupersetOf xs ys } -> t
+  (|$|) : (xs |-> t) -> Union ys -> { auto prf: SupersetOf xs ys } -> t
   (|$|) f u = match f u
 
-  infixl 0 $
-  ($) : Funion xs t -> a -> { auto prf: SupersetOf xs [a] } -> t
+  ($) : (xs |-> t) -> a -> { auto prf: SupersetOf xs [a] } -> t
   ($) f { prf } v = match f (just v)
 
   infixl 0 |>>
-  (|>>) : Union ys -> Funion xs t -> { auto prf : SupersetOf xs ys } -> t
+  (|>>) : Union ys -> (xs |-> t) -> { auto prf : SupersetOf xs ys } -> t
   u |>> f = f |$| u
 
-  (>>>) :a -> Funion xs t -> { auto prf: SupersetOf xs [a] } -> t
+  (>>>) :a -> (xs |-> t) -> { auto prf: SupersetOf xs [a] } -> t
+  a >>> f = f |$| (just a)
+
+namespace FunionShorthand
+  (|->) : (a : Type) -> Type -> { auto prf : IsUnion a xs } -> Type
+  (|->) a b { xs } = xs |-> b
+
 
 namespace FunctionFunction
   (||) : (a -> c) -> (b -> c) -> [a, b] |-> c
