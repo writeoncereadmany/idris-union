@@ -37,11 +37,11 @@ namespace Union
   just x { prf = Later _} = NotYet $ just x
 
   total
-  perhaps : Union xs -> { auto prf : Contains xs a } -> Maybe a
-  perhaps (This x) { prf = Now } = Just x
-  perhaps (This _) { prf = (Later _) } = Nothing
-  perhaps (NotYet _) { prf = Now } = Nothing
-  perhaps (NotYet x) { prf = (Later _) } = perhaps x
+  extract : Union xs -> { auto prf : Contains xs a } -> Maybe a
+  extract (This x) { prf = Now } = Just x
+  extract (This _) { prf = (Later _) } = Nothing
+  extract (NotYet _) { prf = Now } = Nothing
+  extract (NotYet x) { prf = (Later _) } = extract x
 
   ||| converts an instance of a union to an instance of a "larger" union,
   ||| defined as a union which covers all the possibilities of the input union
@@ -51,12 +51,12 @@ namespace Union
   ||| Under this definition is it legal to "widen" from (String || Nat) to
   ||| (Nat || String)
   total
-  widen : Union xs
-       -> { auto prf : SupersetOf ys xs }
-       -> Union ys
-  widen _ { prf = AnythingSuperEmpty } impossible
-  widen (This x) { prf = (ThisOneCovered y z) } = just x
-  widen (NotYet x) { prf = (ThisOneCovered y z) } = widen x
+  upcast : Union xs
+        -> { auto prf : SupersetOf ys xs }
+        -> Union ys
+  upcast _ { prf = AnythingSuperEmpty } impossible
+  upcast (This x) { prf = (ThisOneCovered y z) } = just x
+  upcast (NotYet x) { prf = (ThisOneCovered y z) } = upcast x
 
 namespace Funion
   data (|->) : List Type -> Type -> Type where
@@ -73,7 +73,7 @@ namespace Funion
        -> Union xs
        -> { auto prf : SupersetOf ys xs}
        -> a
-  match clauses xs = match' clauses (widen xs)
+  match clauses xs = match' clauses (upcast xs)
 
   data CanReplace : List Type -> Type -> Type -> List Type -> Type where
     ReplaceHere : CanReplace (a :: xs) a b (b :: xs)

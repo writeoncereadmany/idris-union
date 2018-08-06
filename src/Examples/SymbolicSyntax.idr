@@ -13,10 +13,10 @@ itsAString = just "Hello"
 -- extracting from union types: it could be a string, or a bool, but not a nat
 
 probablyString : Maybe String
-probablyString = perhaps itsAString -- yielding Just "Hello"
+probablyString = extract itsAString -- yielding Just "Hello"
 
 probablyNotBool : Maybe Bool
-probablyNotBool = perhaps itsAString -- yielding Nothing
+probablyNotBool = extract itsAString -- yielding Nothing
 
 -- fails to compile
 -- definitelyNotNat : Maybe Nat
@@ -25,12 +25,12 @@ probablyNotBool = perhaps itsAString -- yielding Nothing
 -- widening union types, either to a larger set of types
 
 stillAString : Union [String, Bool, Nat]
-stillAString = widen itsAString
+stillAString = upcast itsAString
 
 -- or exactly the same set of types, just specified in a different order
 
 alsoStillAString : Union [Bool, String]
-alsoStillAString = widen itsAString
+alsoStillAString = upcast itsAString
 
 -- funions are functions over unions, built from functions over its possibilities
 

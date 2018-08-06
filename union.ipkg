@@ -5,6 +5,7 @@ sourcedir = src
 pkgs = specdris
 
 modules = Union
+        , Examples.SymbolicSyntax
        -- test modules
         , Test.UnionSpec
 
