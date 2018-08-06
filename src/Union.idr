@@ -23,10 +23,11 @@ namespace Union
     Later : Contains xs type -> Contains (_ :: xs) type
 
   data SupersetOf : (super : List Type) -> (sub : List Type) -> Type where
-    AnythingSuperEmpty : SupersetOf _ []
-    ThisOneCovered : Contains super first
-                  -> SupersetOf super (rest)
-                  -> SupersetOf super (first :: rest)
+    ListsMatch : SupersetOf xs xs
+    ExtraTypes : (x : Type) -> SupersetOf (x :: xs) xs
+    Covered    : Contains super first
+              -> SupersetOf super rest
+              -> SupersetOf super (first :: rest)
 
   data IsUnion : Type -> List Type -> Type where
     MkIsUnion : IsUnion (Union xs) xs
@@ -45,18 +46,19 @@ namespace Union
 
   ||| converts an instance of a union to an instance of a "larger" union,
   ||| defined as a union which covers all the possibilities of the input union
-  ||| eg, (String || Nat || Bool) is larger than (String || Nat), but
-  ||| (String || Nat || Bool) is not larger than (String || Double), because the
-  ||| former does not cover the Double case.
-  ||| Under this definition is it legal to "widen" from (String || Nat) to
-  ||| (Nat || String)
+  ||| eg, (Union [String, Nat, Bool]) is larger than (Union [String, Nat]), but
+  ||| (Union [String, Nat, Bool]) is not larger than (Union [String, Double]),
+  ||| because the former does not cover the Double case.
+  ||| Under this definition is it legal (and often useful!) to "upcast"
+  ||| from (Union [String, Nat]) to (Union [Nat || String])
   total
   upcast : Union xs
         -> { auto prf : SupersetOf ys xs }
         -> Union ys
-  upcast _ { prf = AnythingSuperEmpty } impossible
-  upcast (This x) { prf = (ThisOneCovered y z) } = just x
-  upcast (NotYet x) { prf = (ThisOneCovered y z) } = upcast x
+  upcast x { prf = ListsMatch } = x
+  upcast x { prf = (ExtraTypes y) } = NotYet x
+  upcast (This x) { prf = (Covered y z) } = just x
+  upcast (NotYet x) { prf = (Covered y z) } = upcast x
 
 namespace Funion
   data (|->) : List Type -> Type -> Type where
@@ -69,10 +71,7 @@ namespace Funion
   match' (_ :: cases) (NotYet rest) = match' cases rest
 
   total
-  match : ys |-> a
-       -> Union xs
-       -> { auto prf : SupersetOf ys xs}
-       -> a
+  match : ys |-> a -> Union xs -> { auto prf : SupersetOf ys xs} -> a
   match clauses xs = match' clauses (upcast xs)
 
   data CanReplace : List Type -> Type -> Type -> List Type -> Type where
@@ -92,17 +91,10 @@ namespace Funion
      -> { auto prf : CanReplace xs a b ys }
      -> Union xs
      -> Union ys
-  -- these three cases completely describe the behaviour of map
   map f { prf  =  ReplaceHere } (This x) = just (f x)
   map f { prf  =  (ReplaceThere prf') } (NotYet union') = NotYet (map f union')
   map f { prf  =  (ReplaceThere z) } (This x) = just x
-  -- this case should be probably impossible, if I can find a way to
-  -- ensure a union never mentions the same type twice
-  -- The trick is formulating an expression that is only matched when two
-  -- types are distinct, ie not unifiable :/
-  -- Once I've solved that problem, I can also implement operations like
-  -- narrow or split
-  map f { prf  =  ReplaceHere } (NotYet x) = ?only_possible_under_type_duplication_1
+  map f { prf  =  ReplaceHere } (NotYet x) = upcast x
 
   infixl 0 |$|
   (|$|) : (xs |-> t) -> Union ys -> { auto prf: SupersetOf xs ys } -> t

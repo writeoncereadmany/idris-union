@@ -157,3 +157,155 @@ anArea = area |$ shape
 anArea : Double
 anArea = area $ Circle (0, 0) 10
 ```
+
+You can also compose funions with functions, functions with funions, and funions
+with funions the same way:
+
+```idris
+perimeter : Shape |-> Double
+trianglePerimeter : Triangle -> Double
+
+perimeter2 : [Rectangle, Circle, Triangle] |-> Double
+perimeter2 = perimeter || trianglePerimeter
+```
+
+### Some Things with Unions that Don't Work
+
+There are various formulations of unions that don't make sense, but which I
+can't currently prevent:
+
+```idris
+-- this is expressible - as unions are types - but I don't really want it
+-- to be, because nested unions don't really make sense. If there were a way
+-- to have a Union [Shape, Triangle] automatically flatten to a
+-- Union [Rectangle, Circle, Triangle], that would be super convenient
+shape : Union [ Union [ Rectangle, Circle ], Triangle ]
+
+-- this is expressible, but as all operations are keyed by type alone,
+-- i don't want it to be. not being able to prove that a union is parameterised
+-- by a list of distinct types makes certain useful operations impossible to
+-- implement properly
+stringOrError : Union [String, String]
+
+-- there is also the concept of unions where each form is labelled,
+-- so it mimics a constructor with a name rather than just a type-keyed union,
+-- which is sometimes a lighter-weight approach than using fresh types.
+-- Whilst this is expressible, and possible to prove we don't reuse the same
+-- tag, I've not built anything around the concept yet.
+stringOrError : LabelledUnion ["success" ::: String, "failure" ::: String]
+```
+
+The one I'm currently trying to resolve is the one which permits types like
+`Union [String, String]`. Let's take a look at `map`:
+
+```idris
+-- given a couple of simple unions and a simple function:
+aString : Union [String, Bool]
+aString = just "hello"
+
+aBool : Union [String, Bool]
+aBool = just True
+
+boolToNat : Bool -> Nat
+boolToNat b = if b then 1 else 0
+
+-- map takes a function from a to b, a union over types xs,
+-- and a proof that there is an a in the union which can be replaced by a b,
+-- and a list of types ys which is xs with the a replaced by a b
+-- and returns a union over types ys
+map : (a -> b) -> Union xs -> { auto prf : CanReplace xs a b ys } -> Union ys
+
+-- we can map over the unions, and only modify the value if types match:
+
+stillAString : Union [String, Nat]
+stillAString = map boolToNat aString -- yields the string "hello"
+
+nowANumber : Union [String, Nat]
+nowANumber = map boolToNat aBool -- yields the number 1
+```
+
+The problem with this comes when we have types like `Union [String, String]`,
+and to understand why, we need to look at the definition of `Union`:
+
+```idris
+data Union : List Type -> Type where
+  This  : a -> Union (a :: rest)
+  NotYet : Union xs -> Union (a :: xs)
+```
+
+So, `aString : Union [String, Bool]` specified above is represented by
+`This "hello"`, whereas `aBool : Union [String, Bool]` is represented by
+`NotYet (This True)`. As we add various proofs, we can add some new capabilities:
+
+```idris
+-- this proof lets us know not only that a type is within a union, but where in
+-- that union it lies, by pattern matching on the proof term:
+data Contains : List Type -> Type -> Type where
+  Now : Contains (x :: _) x
+  Later : Contains xs type -> Contains (_ :: xs) type
+
+-- this allows us to construct unions from values in a nice clean way:
+total
+just : a -> { auto prf : Contains ys a } -> Union ys
+just x { prf = Now } = This x
+just x { prf = Later _} = NotYet $ just x
+
+-- this proof lets us know that all of one set of types are present in the
+-- other set, and where each set of corresponding types lie
+data SupersetOf : (super : List Type) -> (sub : List Type) -> Type where
+  ListsMatch : SupersetOf xs xs
+  ExtraTypes : (x : Type) -> SupersetOf (x :: xs) xs
+  Covered    : Contains super first
+            -> SupersetOf super rest
+            -> SupersetOf super (first :: rest)
+
+-- which allows us to upcast unions
+total
+upcast : Union xs
+      -> { auto prf : SupersetOf ys xs }
+      -> Union ys
+upcast x { prf = ListsMatch } = x
+upcast x { prf = (ExtraTypes y) } = NotYet x
+upcast (This x) { prf = (Covered y z) } = just x
+upcast (NotYet x) { prf = (Covered y z) } = upcast x
+```
+
+But that's not sufficiently constraining, as is made obvious when we try
+to implement `extract`, which turns a `Union` into a `Maybe`:
+
+```idris
+total
+extract : Union xs -> { auto prf : Contains xs a } -> Maybe a
+extract (This x) { prf = Now } = Just x
+extract (This _) { prf = (Later _) } = Nothing
+extract (NotYet _) { prf = Now } = Nothing
+extract (NotYet x) { prf = (Later _) } = extract x
+```
+
+This works just fine... until you have duplicated types in the union. The
+problem is that there are two ways to have a `String` in a `Union [String, String]`:
+either `This "hello"` or `NotYet (This "hello")`. Both are valid constructions.
+
+However, if you try this:
+
+```idris
+string1 : Union [String, String]
+string1 = This "hello"
+
+string2 : Union [String, String]
+string2 = NotYet (This "hello")
+
+maybeString1 : Maybe String
+maybeString1 = extract string1 -- yields: Just "hello"
+
+maybeString2 : Maybe String
+maybeString2 = extract string2 -- yields: Nothing
+```
+
+This happens because we're looking up where in the union to retrieve the string
+from, based on the proof that it contains a String, and the first proof found
+by search is `Now`. So if it's not in the head position, it doesn't find it.
+
+But there are multiple viable proofs available that a `String` is in the union,
+and they imply different positions. Which is true, because we have a union with
+multiple incidences of `String`.
