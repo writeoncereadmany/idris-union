@@ -23,11 +23,12 @@ namespace Union
     Later : Contains xs type -> Contains (_ :: xs) type
 
   data SupersetOf : (super : List Type) -> (sub : List Type) -> Type where
-    ListsMatch : SupersetOf xs xs
-    ExtraTypes : (x : Type) -> SupersetOf (x :: xs) xs
-    Covered    : Contains super first
-              -> SupersetOf super rest
-              -> SupersetOf super (first :: rest)
+    AnythingSuperEmpty : SupersetOf _ []
+    ListsMatch         : SupersetOf xs xs
+    ExtraTypes         : (x : Type) -> SupersetOf (x :: xs) xs
+    Covered            : Contains super first
+                      -> SupersetOf super rest
+                      -> SupersetOf super (first :: rest)
 
   data IsUnion : Type -> List Type -> Type where
     MkIsUnion : IsUnion (Union xs) xs
@@ -55,6 +56,7 @@ namespace Union
   upcast : Union xs
         -> { auto prf : SupersetOf ys xs }
         -> Union ys
+  upcast _ { prf = AnythingSuperEmpty } impossible
   upcast x { prf = ListsMatch } = x
   upcast x { prf = (ExtraTypes y) } = NotYet x
   upcast (This x) { prf = (Covered y z) } = just x
